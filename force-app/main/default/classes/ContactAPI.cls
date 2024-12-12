@@ -2,17 +2,29 @@
 global with sharing class ContactAPI {
 
     @HttpPost
-    global static String createOrUpdateContact(String firstName, String lastName, String email) {
+    global static String createOrUpdateContact(String accountName, String firstName, String lastName, String email) {
+        // Check if the Account exists
+        List<Account> existingAccounts = [SELECT Id FROM Account WHERE Name = :accountName LIMIT 1];
+        Account account;
+        
+        if (!existingAccounts.isEmpty()) {
+            account = existingAccounts[0];
+        } else {
+            account = new Account(Name = accountName);
+            insert account;
+        }
+
+        // Check if the Contact exists
         List<Contact> existingContacts = [SELECT Id FROM Contact WHERE Email = :email LIMIT 1];
         
         if (!existingContacts.isEmpty()) {
-            // Return the existing contact's ID
             return existingContacts[0].Id;
         } else {
             Contact newContact = new Contact(
                 FirstName = firstName,
                 LastName = lastName,
-                Email = email
+                Email = email,
+                AccountId = account.Id
             );
             insert newContact;
             return newContact.Id;

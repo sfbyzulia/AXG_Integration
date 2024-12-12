@@ -1,39 +1,54 @@
 @isTest
 public class ContactAPITest {
 
-    @isTest
-    static void createNewContact() {
+    @isTest 
+    static void testCreateNewContact() {
+        String accountName = 'Test Account';
         String firstName = 'John';
         String lastName = 'Doe';
         String email = 'john.doe@example.com';
 
-        String contactId = ContactAPI.createOrUpdateContact(firstName, lastName, email);
+        String contactId = ContactAPI.createOrUpdateContact(accountName, firstName, lastName, email);
 
-        Contact createdContact = [SELECT Id, FirstName, LastName, Email FROM Contact WHERE Id = :contactId];
-        Assert.isTrue(createdContact != null, 'Contact should have been created');
+        Contact createdContact = [SELECT Id, Email, FirstName, LastName FROM Contact WHERE Id = :contactId LIMIT 1];
+        Assert.isNotNull(createdContact, 'Contact should be created');
+        Assert.areEqual(email, createdContact.Email, 'Email should match');
         Assert.areEqual(firstName, createdContact.FirstName, 'First name should match');
         Assert.areEqual(lastName, createdContact.LastName, 'Last name should match');
-        Assert.areEqual(email, createdContact.Email, 'Email should match');
     }
 
-    @isTest
-    static void checkExistingContact() {
-        Contact existingContact = new Contact(FirstName = 'Jane', LastName = 'Doe', Email = 'jane.doe@example.com');
+    @isTest 
+    static void testExistingContact() {
+        Account account = new Account(Name = 'Existing Account');
+        insert account;
+
+        Contact existingContact = new Contact(
+            FirstName = 'Jane',
+            LastName = 'Smith',
+            Email = 'jane.smith@example.com',
+            AccountId = account.Id
+        );
         insert existingContact;
 
-        String contactId = ContactAPI.createOrUpdateContact('Jane', 'Doe', 'jane.doe@example.com');
+        String contactId = ContactAPI.createOrUpdateContact(account.Name, 'Jane', 'Smith', existingContact.Email);
 
-        Assert.areEqual(existingContact.Id, contactId, 'Existing contact ID should be returned');
+        Assert.areEqual(existingContact.Id, contactId, 'Should return the existing contact ID');
     }
 
-    @isTest
+    @isTest 
     static void testUpdateContact() {
-        Contact contact = new Contact(FirstName = 'Alice', LastName = 'Smith', Email = 'alice.smith@example.com');
+        Contact contact = new Contact(
+            FirstName = 'Bob',
+            LastName = 'Brown',
+            Email = 'bob.brown@example.com'
+        );
         insert contact;
 
-        ContactAPI.updateContact(contact.Id, 'new.email@example.com');
+        String newEmail = 'bob.newemail@example.com';
 
-        Contact updatedContact = [SELECT Email FROM Contact WHERE Id = :contact.Id];
-        Assert.areEqual('new.email@example.com', updatedContact.Email, 'Email should have been updated');
+        ContactAPI.updateContact(contact.Id, newEmail);
+
+        Contact updatedContact = [SELECT Id, Email FROM Contact WHERE Id = :contact.Id];
+        Assert.areEqual(newEmail, updatedContact.Email, 'Email should be updated');
     }
 }
