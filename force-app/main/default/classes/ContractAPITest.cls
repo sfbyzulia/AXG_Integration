@@ -1,67 +1,60 @@
 @isTest
 public class ContractAPITest {
-
-    @isTest 
-    static void testCreateNewOpportunity() {
-        String opportunityName = 'New Opportunity';
-        Integer contractTerm = 12;
-        String status = 'Draft';
     
-        String contractId = ContractAPI.createContract(opportunityName, contractTerm, status);
-    
-        update new Contract(Id = contractId, Status = 'Activated');
-    
-        // Verify the contract details
-        Contract createdContract = [SELECT Id, ContractTerm, Status FROM Contract WHERE Id = :contractId LIMIT 1];
-        Assert.isNotNull(createdContract, 'Contract should be created');
-        Assert.areEqual(contractTerm, createdContract.ContractTerm, 'Contract term should match');
-        Assert.areEqual('Activated', createdContract.Status, 'Status should match');
-    }    
-
-    @isTest 
-    static void testExistingOpportunity() {
-        Account account = new Account(Name = 'Test Account');
-        insert account;
-
-        Opportunity opportunity = new Opportunity(
-            Name = 'Existing Opportunity',
-            StageName = 'Prospecting',
-            CloseDate = Date.today().addDays(30),
-            AccountId = account.Id
-        );
-        insert opportunity;
-
-        Integer contractTerm = 24;
-        String status = 'Activated';
-
-        String contractId = ContractAPI.createContract(opportunity.Name, contractTerm, status);
-
-        Contract createdContract = [SELECT Id, ContractTerm, Status FROM Contract WHERE Id = :contractId LIMIT 1];
-        Assert.isNotNull(createdContract, 'Contract should be created');
-        Assert.areEqual(contractTerm, createdContract.ContractTerm, 'Contract term should match');
-        Assert.areEqual('Activated', createdContract.Status, 'Status should match');
-
-        Opportunity updatedOpportunity = [SELECT Id, ContractId FROM Opportunity WHERE Id = :opportunity.Id];
-        Assert.areEqual(createdContract.Id, updatedOpportunity.ContractId, 'Opportunity should be linked to the new contract');
+    // Test the createContract method when the Account exists
+    @isTest static void testCreateContractWithExistingAccount() {
+        Account testAccount = new Account(Name = 'Test Account');
+        insert testAccount;
+        
+        // Call the API method
+        String contractId = ContractAPI.createContract('Test Account', 12, 'Draft');
+        
+        // Verify the Contract was created
+        Contract createdContract = [SELECT Id, AccountId, ContractTerm, Status FROM Contract WHERE Id = :contractId LIMIT 1];
+        
+        Assert.isTrue(createdContract != null, 'Contract should be created');
+        Assert.areEqual(testAccount.Id, createdContract.AccountId, 'Contract should be linked to the existing Account');
+        Assert.areEqual(12, createdContract.ContractTerm, 'Contract term should match');
+        Assert.areEqual('Draft', createdContract.Status, 'Contract status should match');
     }
-
-    @isTest 
-    static void testUpdateContract() {
-        Account account = new Account(Name = 'Test Account');
-        insert account;
-
-        Contract contract = new Contract(
-            AccountId = account.Id,
-            ContractTerm = 6,
+    
+    // Test the createContract method when the Account does not exist
+    @isTest static void testCreateContractWithNewAccount() {
+        String accountName = 'New Test Account';
+        
+        // Call the API method
+        String contractId = ContractAPI.createContract(accountName, 24, 'Draft');
+        
+        // Verify the Account was created
+        Account createdAccount = [SELECT Id, Name FROM Account WHERE Name = :accountName LIMIT 1];
+        Assert.isTrue(createdAccount != null, 'Account should be created');
+        
+        // Verify the Contract was created and linked to the new Account
+        Contract createdContract = [SELECT Id, AccountId, ContractTerm, Status FROM Contract WHERE Id = :contractId LIMIT 1];
+        Assert.areEqual(createdAccount.Id, createdContract.AccountId, 'Contract should be linked to the new Account');
+        Assert.areEqual(24, createdContract.ContractTerm, 'Contract term should match');
+        Assert.areEqual('Draft', createdContract.Status, 'Contract status should match');
+    }
+    
+    // Test the updateContract method
+    @isTest static void testUpdateContract() {
+        // Create a test Account
+        Account testAccount = new Account(Name = 'Update Test Account');
+        insert testAccount;
+        
+        // Create a test Contract
+        Contract testContract = new Contract(
+            AccountId = testAccount.Id,
+            ContractTerm = 12,
             Status = 'Draft'
         );
-        insert contract;
-
-        String newStatus = 'Activated';
-
-        ContractAPI.updateContract(contract.Id, newStatus);
-
-        Contract updatedContract = [SELECT Id, Status FROM Contract WHERE Id = :contract.Id];
-        Assert.areEqual(newStatus, updatedContract.Status, 'Contract status should be updated');
+        insert testContract;
+        
+        // Call the API method to update the contract status
+        ContractAPI.updateContract(testContract.Id, 'Activated');
+        
+        // Verify the Contract status was updated
+        Contract updatedContract = [SELECT Id, Status FROM Contract WHERE Id = :testContract.Id LIMIT 1];
+        Assert.areEqual('Activated', updatedContract.Status, 'Contract status should be updated to Activated');
     }
 }

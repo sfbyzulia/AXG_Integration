@@ -1,45 +1,33 @@
 @RestResource(urlMapping='/api/contracts/*')
 global with sharing class ContractAPI {
 
+    // Create a new Contract
     @HttpPost
-    global static String createContract(String opportunityName, Integer contractTerm, String status) {
-        // Check if the Opportunity exists
-        List<Opportunity> existingOpportunities = [SELECT Id, AccountId FROM Opportunity WHERE Name = :opportunityName LIMIT 1];
-        Opportunity opportunity;
+    global static String createContract(String accountName, Integer contractTerm, String status) {
+        // Check if the Account exists
+        List<Account> existingAccounts = [SELECT Id FROM Account WHERE Name = :accountName LIMIT 1];
+        Account account;
 
-        if (!existingOpportunities.isEmpty()) {
-            opportunity = existingOpportunities[0];
+        if (!existingAccounts.isEmpty()) {
+            account = existingAccounts[0];
         } else {
-            // Create a new Account for the new Opportunity
-            Account account = new Account(Name = 'Default Account');
+            // Create a new Account if none exists
+            account = new Account(Name = accountName);
             insert account;
-
-            opportunity = new Opportunity(
-                Name = opportunityName,
-                StageName = 'Prospecting',
-                CloseDate = Date.today().addDays(30),
-                AccountId = account.Id
-            );
-            insert opportunity;
         }
 
-        // Create the Contract linked to the Opportunity's Account
+        // Create the Contract linked to the Account
         Contract newContract = new Contract(
-            AccountId = opportunity.AccountId, 
+            AccountId = account.Id,
             ContractTerm = contractTerm,
-            Status = 'Draft'
+            Status = status
         );
         insert newContract;
-        newContract.Status = 'Activated';
-        update newContract;        
-
-        // Update the Opportunity with the new Contract's ID
-        opportunity.ContractId = newContract.Id;
-        update opportunity;
 
         return newContract.Id;
     }
 
+    // Update an existing Contract
     @HttpPatch
     global static void updateContract(String contractId, String status) {
         // Retrieve the contract to update
