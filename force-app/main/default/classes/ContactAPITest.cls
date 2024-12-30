@@ -1,11 +1,30 @@
 @isTest
 public class ContactAPITest {
-
+    
     // Create an account for testing
     private static Account createTestAccount(String name) {
         Account acc = new Account(Name = name);
         insert acc;
         return acc;
+    }
+
+    // Test for createOrUpdateContact method when the Account exists
+    @isTest
+    static void testCreateOrUpdateContactWithExistingAccount() {
+        String accountName = 'Existing Account';
+        String firstName = 'Emily';
+        String lastName = 'Clark';
+        String email = 'emily.clark@example.com';
+        
+        // Create an account before calling the method
+        createTestAccount(accountName);
+
+        // Call the createOrUpdateContact method
+        String contactId = ContactAPI.createOrUpdateContact(accountName, firstName, lastName, email);
+        Contact insertedContact = [SELECT Id, FirstName, LastName, Email FROM Contact WHERE Id = :contactId LIMIT 1];
+
+        Assert.isTrue(insertedContact != null, 'Contact should be created');
+        Assert.areEqual(email, insertedContact.Email, 'Email should match the input email');
     }
 
     // Test for createOrUpdateContact method
