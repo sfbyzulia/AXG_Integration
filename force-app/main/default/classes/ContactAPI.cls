@@ -37,7 +37,6 @@ global class ContactAPI {
         global static void updateContact() {
             RestResponse res = RestContext.response;
     
-            try {
                 // Obtenir l'ID du contact à partir de l'URL
                 String contactId = RestContext.request.requestURI.substring(
                     RestContext.request.requestURI.lastIndexOf('/') + 1
@@ -89,17 +88,12 @@ global class ContactAPI {
                 // Réponse de succès
                 res.statusCode = 200; // OK
                 res.responseBody = Blob.valueOf('{"message": "Contact updated successfully."}');
-            } catch (Exception e) {
-                // Gérer les erreurs générales
-                res.statusCode = 500; // Internal Server Error
-                res.responseBody = Blob.valueOf('{"errorCode": "INTERNAL_SERVER_ERROR", "message": "' + e.getMessage() + '"}');
-            }
-        }
-    
+             }
+        
         @HttpDelete
         global static void deleteContact() {
             RestResponse res = RestContext.response;
-            try {
+
                 // Obtenir l'ID du contact à supprimer à partir de l'URL
                 String contactId = RestContext.request.requestURI.substring(
                     RestContext.request.requestURI.lastIndexOf('/') + 1
@@ -111,10 +105,5 @@ global class ContactAPI {
                 // Bloquer la suppression avec une réponse d'erreur personnalisée
                 res.responseBody = Blob.valueOf('Contacts cannot be deleted. Please deactivate instead.');
                 res.statusCode = 400;
-            } catch (Exception e) {
-                // Gérer les cas où l'ID est invalide ou inexistant
-                res.responseBody = Blob.valueOf('Error: ' + e.getMessage());
-                res.statusCode = 500;
-            }
         }
     }    
