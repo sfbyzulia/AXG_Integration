@@ -2,38 +2,78 @@
 global class ContactAPIDeactivation {
 
     @HttpPatch
-    global static void deactivateContact() {
-        RestRequest req = RestContext.request;
+    global static List<String> deactivateContacts() {
         RestResponse res = RestContext.response;
 
-         // Parse the contactId from the request body
-         Map<String, Object> requestBody = (Map<String, Object>) JSON.deserializeUntyped(req.requestBody.toString());
-         String contactId = requestBody != null && requestBody.containsKey('contactId') ? (String) requestBody.get('contactId') : null; 
+        // Récupérer et désérialiser le corps de la requête
+        String requestBody = RestContext.request.requestBody.toString();
+        Object deserializedBody = JSON.deserializeUntyped(requestBody);
 
-        // If contactId is blank, return an error response
-        if (String.isBlank(contactId)) {
-            res.statusCode = 400; // Bad Request
-            res.responseBody = Blob.valueOf('{"errorCode": "MISSING_REQUIRED_FIELD", "message": "Contact ID is required."}');
-            return;
+        // Validation du type de l'entrée
+        if (!(deserializedBody instanceof List<Object>)) {
+            res.statusCode = 400; // Mauvaise requête
+            res.responseBody = Blob.valueOf('{"errorCode": "INVALID_REQUEST", "message": "The request body must be a list of contact objects."}');
+            return null;
         }
 
-        // Query the contact
-        List<Contact> contacts = [SELECT Id, IsActive__c FROM Contact WHERE Id = :contactId LIMIT 1];
+        List<Object> inputList = (List<Object>) deserializedBody;
+        List<Map<String, Object>> contactsData = new List<Map<String, Object>>();
 
-        // Check if the contact exists
-        if (contacts.isEmpty()) {
-            res.statusCode = 404; // Not Found
-            res.responseBody = Blob.valueOf('{"errorCode": "NOT_FOUND", "message": "Contact not found."}');
-            return;
+        // Vérification que chaque élément est un map
+        for (Object item : inputList) {
+            if (item instanceof Map<String, Object>) {
+                contactsData.add((Map<String, Object>) item);
+            } else {
+                res.statusCode = 400; // Mauvaise requête
+                res.responseBody = Blob.valueOf('{"errorCode": "INVALID_REQUEST", "message": "Each item in the request body must be a contact object."}');
+                return null;
+            }
         }
 
-        // Deactivate the contact
-        Contact contact = contacts[0];
-        contact.IsActive__c = false;
-        update contact;
+        // Validation de l'entrée
+        if (contactsData.isEmpty()) {
+            res.statusCode = 400; // Mauvaise requête
+            res.responseBody = Blob.valueOf('{"errorCode": "MISSING_REQUIRED_FIELD", "message": "The request body must contain a list of contacts to deactivate."}');
+            return null;
+        }
 
-        // Send success response
-        res.statusCode = 200; // OK
-        res.responseBody = Blob.valueOf('{"message": "Contact successfully deactivated."}');
+        List<String> results = new List<String>();
+
+        for (Map<String, Object> contactData : contactsData) {
+            String contactId = (String) contactData.get('id');
+            String email = (String) contactData.get('email');
+
+            // Validation de l'ID ou de l'email
+            if (String.isBlank(contactId) && String.isBlank(email)) {
+                results.add('{"errorCode": "MISSING_REQUIRED_FIELD", "message": "Contact ID or Email is required."}');
+                continue;
+            }
+
+            // Recherche du contact par ID ou email
+            List<Contact> contacts;
+            if (!String.isBlank(contactId)) {
+                contacts = [SELECT Id, IsActive__c FROM Contact WHERE Id = :contactId LIMIT 1];
+            } else {
+                contacts = [SELECT Id, IsActive__c FROM Contact WHERE Email = :email LIMIT 1];
+            }
+
+            if (contacts.isEmpty()) {
+                results.add('{"errorCode": "NOT_FOUND", "message": "Contact not found."}');
+                continue;
+            }
+
+            // Désactivation du contact
+            Contact contactToDeactivate = contacts[0];
+            contactToDeactivate.IsActive__c = false;
+
+            try {
+                update contactToDeactivate;
+                results.add('{"message": "Contact deactivated successfully.", "id": "' + contactToDeactivate.Id + '"}');
+            } catch (Exception e) {
+                results.add('{"errorCode": "DEACTIVATION_FAILED", "message": "' + e.getMessage() + '"}');
+            }
+        }
+
+        return results;
     }
 }
