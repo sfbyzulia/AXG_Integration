@@ -1,130 +1,111 @@
 @isTest
-private class ContractAPITest {
+public class ContractAPITest {
 
-    /**
-     * Helper method to configure RestRequest and RestResponse.
-     */
-    private static void configureRestContext(String requestURI, String httpMethod, String requestBody) {
+    @testSetup
+    static void setupTestData() {
+        User axguser = [SELECT Id FROM User WHERE Username = 'zulfiyyar27@gmail.com'];
+        System.runAs(axguser) {
+            // Create test data
+            Account testAccount = new Account(Name = 'Test Account');
+            insert testAccount;
+
+            Contract testContract = new Contract(
+                AccountId = testAccount.Id,
+                Name = 'Test Contract',
+                StartDate = Date.today(),
+                ContractTerm = 12
+            );
+            insert testContract;
+        }
+    }
+
+    @isTest
+    static void testCreateContracts() {
         RestRequest req = new RestRequest();
-        req.requestURI = requestURI;
-        req.httpMethod = httpMethod;
-        req.requestBody = Blob.valueOf(requestBody);
-
         RestResponse res = new RestResponse();
         RestContext.request = req;
         RestContext.response = res;
-    }
 
-    /**
-     * Helper method to create a test account.
-     */
-    private static Account createTestAccount() {
-        Account account = new Account(Name = 'Test Account');
-        insert account;
-        return account;
-    }
+        Account testAccount = [SELECT Id FROM Account LIMIT 1];
 
-    /**
-     * Helper method to create a test contract.
-     */
-    private static Contract createTestContract(Id accountId) {
-        Contract contract = new Contract(
-            AccountId = accountId,
-            Name = 'Test Contract',
-            StartDate = Date.valueOf('2025-01-01'),
-            ContractTerm = 12
-        );
-        insert contract;
-        return [SELECT ContractNumber FROM Contract WHERE Id = :contract.Id LIMIT 1];
+        // Test creating new contracts
+        req.requestBody = Blob.valueOf('[{"accountId": "' + testAccount.Id + '", "contractName": "New Contract", "startDate": "2025-01-01", "contractTerm": 24}]');
+        ContractAPI.createContracts();
+
+        Assert.areEqual(200, res.statusCode, 'The response status code should be 200 for creating contracts.');
+        Assert.isTrue(res.responseBody.toString().contains('Contrats créés avec succès'), 'The response should indicate the contracts were created successfully.');
+
+        Contract newContract = [SELECT Name, ContractTerm FROM Contract WHERE Name = 'New Contract' LIMIT 1];
+        Assert.areEqual('New Contract', newContract.Name, 'The contract name should match the expected value.');
+        Assert.areEqual(24, newContract.ContractTerm, 'The contract term should match the expected value.');
     }
 
     @isTest
-    static void testCreateContract() {
-        // Create test account
-        Account testAccount = createTestAccount();
+    static void testUpdateContracts() {
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
 
-        // Simulate creating a contract
-        configureRestContext('/services/apexrest/Contract/Create/', 'POST',
-            '{"accountId": "' + testAccount.Id + '", "contractName": "Test Contract", "startDate": "2025-01-01", "contractTerm": 12}');
+        Contract existingContract = [SELECT Id, ContractNumber FROM Contract LIMIT 1];
 
-        Test.startTest();
-        String contractNumber = ContractAPI.createContract(testAccount.Id, 'Test Contract', '2025-01-01', 12);
-        Test.stopTest();
+        // Test updating contracts
+        req.requestBody = Blob.valueOf('[{"contractNumber": "' + existingContract.ContractNumber + '", "newStartDate": "2025-02-01", "newContractTerm": 36}]');
+        ContractAPI.updateContracts();
 
-        // Validate the created contract
-        Contract createdContract = [SELECT ContractNumber, AccountId, Name, StartDate, ContractTerm FROM Contract WHERE ContractNumber = :contractNumber LIMIT 1];
-        Assert.isNotNull(createdContract, 'Contract should be created');
-        Assert.areEqual(testAccount.Id, createdContract.AccountId, 'AccountId should match');
-        Assert.areEqual('Test Contract', createdContract.Name, 'Contract name should match');
-        Assert.areEqual(Date.valueOf('2025-01-01'), createdContract.StartDate, 'Start date should match');
-        Assert.areEqual(12, createdContract.ContractTerm, 'Contract term should match');
+        Assert.areEqual(200, res.statusCode, 'The response status code should be 200 for updating contracts.');
+        Assert.isTrue(res.responseBody.toString().contains('Contrats mis à jour avec succès'), 'The response should indicate the contracts were updated successfully.');
+
+        Contract updatedContract = [SELECT StartDate, ContractTerm FROM Contract WHERE Id = :existingContract.Id];
+        Assert.areEqual(Date.valueOf('2025-02-01'), updatedContract.StartDate, 'The contract start date should be updated.');
+        Assert.areEqual(36, updatedContract.ContractTerm, 'The contract term should be updated.');
     }
 
     @isTest
-    static void testCreateContractErrors() {
-        Test.startTest();
-        // Test missing parameters
-        configureRestContext('/services/apexrest/Contract/Create/', 'POST', '{}');
-        ContractAPI.createContract(null, null, null, null);
+    static void testCreateContractsMissingFields() {
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
 
-        RestResponse res = RestContext.response;
-        Assert.areEqual(400, res.statusCode, 'Response status should be 400');
-        Assert.isTrue(res.responseBody.toString().contains('All parameters are required'), 'Error message should indicate missing parameters');
+        // Test missing required fields
+        req.requestBody = Blob.valueOf('[{"accountId": "", "contractName": "", "startDate": "", "contractTerm": null}]');
+        ContractAPI.createContracts();
 
-        // Test non-existent account
-        configureRestContext('/services/apexrest/Contract/Create/', 'POST',
-            '{"accountId": "001000000000000AAA", "contractName": "Test Contract", "startDate": "2025-01-01", "contractTerm": 12}');
-        ContractAPI.createContract('001000000000000AAA', 'Test Contract', '2025-01-01', 12);
-        Test.stopTest();
-
-        res = RestContext.response;
-        Assert.areEqual(404, res.statusCode, 'Response status should be 404');
-        Assert.isTrue(res.responseBody.toString().contains('Account not found'), 'Error message should indicate account not found');
+        Assert.areEqual(500, res.statusCode, 'The response status code should be 500 for missing required fields.');
+        Assert.isTrue(res.responseBody.toString().contains('Champ requis manquant'), 'The response should indicate missing required fields.');
     }
 
     @isTest
-    static void testUpdateContract() {
-        // Create test account and contract
-        Account testAccount = createTestAccount();
-        Contract testContract = createTestContract(testAccount.Id);
+    static void testUpdateContractsMissingFields() {
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
 
-        // Simulate updating the contract
-        configureRestContext('/services/apexrest/Contract/Update/', 'PATCH',
-            '{"contractNumber": "' + testContract.ContractNumber + '", "newStartDate": "2025-06-01", "newContractTerm": 24}');
+        // Test missing required fields
+        req.requestBody = Blob.valueOf('[{"contractNumber": "", "newStartDate": "", "newContractTerm": null}]');
+        ContractAPI.updateContracts();
 
-        Test.startTest();
-        ContractAPI.updateContract(testContract.ContractNumber, '2025-06-01', 24);
-        Test.stopTest();
-
-        RestResponse res = RestContext.response;
-        Assert.areEqual(200, res.statusCode, 'Response status should be 200');
-        Assert.isTrue(res.responseBody.toString().contains('Contract updated successfully'), 'Success message should match');
-
-        // Validate the updated contract
-        Contract updatedContract = [SELECT StartDate, ContractTerm FROM Contract WHERE ContractNumber = :testContract.ContractNumber LIMIT 1];
-        Assert.areEqual(Date.valueOf('2025-06-01'), updatedContract.StartDate, 'Start date should be updated');
-        Assert.areEqual(24, updatedContract.ContractTerm, 'Contract term should be updated');
+        Assert.areEqual(500, res.statusCode, 'The response status code should be 500 for missing required fields.');
+        Assert.isTrue(res.responseBody.toString().contains('Champ requis manquant'), 'The response should indicate missing required fields.');
     }
 
     @isTest
-    static void testUpdateContractErrors() {
-        Test.startTest();
-        // Test missing parameters
-        configureRestContext('/services/apexrest/Contract/Update/', 'PATCH', '{}');
-        ContractAPI.updateContract(null, null, null);
+    static void testCreateContractsInvalidAccount() {
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        RestContext.request = req;
+        RestContext.response = res;
 
-        RestResponse res = RestContext.response;
-        Assert.areEqual(400, res.statusCode, 'Response status should be 400');
-        Assert.isTrue(res.responseBody.toString().contains('All parameters are required'), 'Error message should indicate missing parameters');
+        // Test invalid account ID with valid format but nonexistent
+        String invalidAccountId = '001000000000001AAA'; // Valid ID format but not existing in the database
 
-        // Test non-existent contract
-        configureRestContext('/services/apexrest/Contract/Update/', 'PATCH',
-            '{"contractNumber": "CON000000000000AAA", "newStartDate": "2025-06-01", "newContractTerm": 24}');
-        ContractAPI.updateContract('CON000000000000AAA', '2025-06-01', 24);
-        Test.stopTest();
+        // Ensure the ID is not accessible
+        req.requestBody = Blob.valueOf('[{"accountId": "' + invalidAccountId + '", "contractName": "Invalid Contract", "startDate": "2025-01-01", "contractTerm": 24}]');
+        ContractAPI.createContracts();
 
-        res = RestContext.response;
-        Assert.areEqual(404, res.statusCode, 'Response status should be 404');
-        Assert.isTrue(res.responseBody.toString().contains('Contract not found'), 'Error message should indicate contract not found');
+        Assert.areEqual(500, res.statusCode, 'The response status code should indicate an error for invalid account ID.');
+        Assert.isTrue(res.responseBody.toString().contains('ID de compte invalide'), 'The response should indicate invalid account ID.');
     }
 }
