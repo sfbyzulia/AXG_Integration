@@ -121,20 +121,32 @@ global with sharing class ContactAPI {
         res.responseBody = Blob.valueOf(JSON.serialize(responseList));
     }    
     
-        @HttpDelete
-        global static void deleteContact() {
-            RestResponse res = RestContext.response;
+    @HttpDelete
+    global static void deleteContact() {
+        RestResponse res = RestContext.response;
 
-                // Retrieve the contact ID to delete from the URL
-                String contactId = RestContext.request.requestURI.substring(
-                    RestContext.request.requestURI.lastIndexOf('/') + 1
-                );
-    
-                // Check if the contact exists
-                Contact contactToDelete = [SELECT Id FROM Contact WHERE Id = :contactId LIMIT 1];
-    
-                // Block deletion with a custom error response
-                res.responseBody = Blob.valueOf('Les contacts ne peuvent pas être supprimés. Veuillez désactiver le contact.');
-                res.statusCode = 400;
+        // Retrieve the contact ID to delete from the URL
+        String contactId = RestContext.request.requestURI.substring(
+            RestContext.request.requestURI.lastIndexOf('/') + 1
+        );
+
+        // Check if the contact exists
+        List<Contact> contacts = [SELECT Id, IsActive__c FROM Contact WHERE Id = :contactId LIMIT 1];
+
+        if (contacts.isEmpty()) {
+            res.statusCode = 404;
+            res.responseBody = Blob.valueOf('{"error": "Contact non trouvé."}');
+            return;
         }
-    }    
+
+        // Deactivate the contact instead of deleting it
+        Contact contactToDeactivate = contacts[0];
+        contactToDeactivate.IsActive__c = false;
+
+        update contactToDeactivate;
+
+        // Respond with a success message
+        res.statusCode = 200;
+        res.responseBody = Blob.valueOf('Les contacts ne peuvent pas être supprimés. Au lieu de cela, le contact a été désactivé.');
+    }
+}    

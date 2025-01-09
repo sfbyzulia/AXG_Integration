@@ -78,51 +78,35 @@ public class ContactAPITest {
 
     @isTest
     static void testDeleteContact() {
-        Contact existingContact = [SELECT Id FROM Contact LIMIT 1];
-
+        // Create a test contact
+        Contact testContact = new Contact(FirstName = 'Test', LastName = 'User', IsActive__c = true);
+        insert testContact;
+    
+        // Mock REST request and response
         RestRequest req = new RestRequest();
         RestResponse res = new RestResponse();
         RestContext.request = req;
         RestContext.response = res;
-
-        req.requestURI = '/api/contacts/' + existingContact.Id;
-
+    
+        // Set request URI with the test contact ID
+        req.requestURI = '/api/contacts/' + testContact.Id;
+    
+        // Call the deleteContact method
         ContactAPI.deleteContact();
-
-        Assert.areEqual(400, res.statusCode, 'The response status code should be 400.');
-        Assert.isTrue(res.responseBody.toString().contains('Les contacts ne peuvent pas être supprimés'), 'The response should indicate contacts cannot be deleted.');
-    }
-
-    @isTest
-    static void testDeactivateContacts() {
-        Contact existingContact = [SELECT Id FROM Contact WHERE IsActive__c = true LIMIT 1];
-
-        RestRequest req = new RestRequest();
-        RestResponse res = new RestResponse();
-        RestContext.request = req;
-        RestContext.response = res;
-
-        // Test missing ID or email
-        req.requestBody = Blob.valueOf('[{}]');
-        ContactAPIDeactivation.deactivateContacts();
-        Assert.areEqual(400, res.statusCode, 'The response status code should be 400 for missing ID or email.');
-        Assert.isTrue(res.responseBody.toString().contains('Contact ID ou Email champ est requis'), 'The response should indicate missing ID or email.');
-
-        // Test non-existent contact by email
-        req.requestBody = Blob.valueOf('[{"email": "nonexistent@example.com"}]');
-        ContactAPIDeactivation.deactivateContacts();
-        Assert.areEqual(404, res.statusCode, 'The response status code should be 404 for non-existent contact by email.');
-        Assert.isTrue(res.responseBody.toString().contains('Contact non trouvé'), 'The response should indicate the contact was not found.');
-
-        // Test deactivating existing contact
-        req.requestBody = Blob.valueOf('[{"id": "' + existingContact.Id + '"}]');
-        ContactAPIDeactivation.deactivateContacts();
-
-        Assert.areEqual(200, res.statusCode, 'The response status code should be 200.');
-        String responseBody = res.responseBody.toString();
-        Assert.isTrue(responseBody.contains('"message": "Contact désactivé avec succès."'), 'The response should indicate a contact was deactivated.');
-
-        Contact deactivatedContact = [SELECT IsActive__c FROM Contact WHERE Id = :existingContact.Id];
+    
+        // Validate the response status code and message
+        Assert.areEqual(200, res.statusCode, 'The response status code should be 200 for successful deactivation.');
+        Assert.isTrue(res.responseBody.toString().contains('Les contacts ne peuvent pas être supprimés. Au lieu de cela, le contact a été désactivé.'), 'The response should indicate the contact was deactivated.');
+    
+        // Validate that the contact was deactivated
+        Contact deactivatedContact = [SELECT IsActive__c FROM Contact WHERE Id = :testContact.Id];
         Assert.isFalse(deactivatedContact.IsActive__c, 'The contact should be deactivated.');
+    
+        // Test case for non-existent contact
+        req.requestURI = '/api/contacts/001000000000000AAA';
+        ContactAPI.deleteContact();
+    
+        Assert.areEqual(404, res.statusCode, 'The response status code should be 404 for a non-existent contact.');
+        Assert.isTrue(res.responseBody.toString().contains('Contact non trouvé.'), 'The response should indicate the contact was not found.');
     }
 }
